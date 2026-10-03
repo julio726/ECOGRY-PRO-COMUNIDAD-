@@ -1220,91 +1220,112 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
             charts: {}
         };
 
-              // ============================================
-        // FUNCIONES DE ENVÍO DE INFORMES (CORREGIDAS)
+                     // ============================================
+        // FUNCIONES DE ENVÍO DE INFORMES (v3 - con diagnóstico)
         // ============================================
 
-        /**
-         * Lee un valor numérico desde un elemento del DOM de forma segura
-         */
+        /** Lee un número del DOM de forma segura (quita %, kWh, espacios) */
         function leerValorDOM(id) {
             const el = document.getElementById(id);
             if (!el) return 0;
-            const texto = el.textContent.replace('%', '').replace('kWh', '').trim();
-            const val = parseFloat(texto);
+            const val = parseFloat(el.textContent.replace(/[%kWh\s]/gi, ''));
             return isNaN(val) ? 0 : val;
         }
 
-        /**
-         * Envía los datos al Google Apps Script
-         */
+        /** Envía los datos al Apps Script y lee la respuesta REAL (sin no-cors) */
         function enviarInforme(datosSimulacion) {
-            console.log("📤 Enviando datos al servidor:", datosSimulacion);
+            console.log("📤 Enviando:", datosSimulacion);
 
             const btn = document.querySelector('.btn-report');
-            const textoOriginal = btn ? btn.textContent : '';
-            if (btn) {
-                btn.textContent = '⏳ Generando informe...';
-                btn.disabled = true;
-            }
+            const original = btn ? btn.innerHTML : '';
+            if (btn) { btn.innerHTML = '⏳ Generando informe...'; btn.disabled = true; }
 
-            // SIN headers y SIN mode no-cors: así podemos leer la respuesta real
+            // SIN headers y SIN mode:"no-cors" -> así podemos leer el texto de error
             fetch(SCRIPT_URL, {
                 method: "POST",
                 body: JSON.stringify(datosSimulacion)
             })
-            .then(response => response.text())
+            .then(r => r.text())
             .then(text => {
-                console.log("📩 Respuesta del servidor:", text);
+                console.log("📩 Respuesta cruda del servidor:", text);
+
+                // 1) Detectar el error típico de "web app no publicada / sin función"
+                if (/introuvable|not\s*found|doGet|doPost|service|exception|error/i.test(text) && !/^\s*\{/.test(text)) {
+                    throw new Error("SCRIPT_NO_PUBLICADO::" + text.trim());
+                }
+
+                // 2) Intentar parsear JSON
+                let data;
                 try {
-                    const data = JSON.parse(text);
-                    if (data.result === "success") {
-                        alert("✅ ¡Informe generado!\n\n📧 PDF enviado a:\njuliodanielvidespayares2@gmail.com\n📊 Datos guardados en la hoja de cálculo.\n\n(Revisa Spam si no lo ves)");
-                    } else {
-                        alert("❌ El servidor reportó un error:\n" + (data.message || text));
-                    }
+                    data = JSON.parse(text);
                 } catch (e) {
-                    alert("⚠️ El servidor no respondió en formato esperado.\nRevisa la consola (F12).");
+                    throw new Error("RESPUESTA_NO_JSON::" + text.trim().slice(0, 300));
+                }
+
+                // 3) Evaluar el resultado
+                if (data.result === "success") {
+                    alert("✅ ¡INFORME GENERADO!\n\n📧 PDF enviado a:\njuliodanielvidespayares2@gmail.com\n📊 Fila guardada en la hoja de cálculo.\n\n💡 Si no lo ves, revisa la carpeta SPAM y la pestaña PROMOCIONES.");
+                } else {
+                    alert("❌ El servidor reportó un error:\n" + (data.message || JSON.stringify(data)));
                 }
             })
-            .catch(error => {
-                console.error("❌ Error de red:", error);
-                alert("❌ Error de conexión.\nDetalles: " + error.message);
+            .catch(err => {
+                console.error("❌", err);
+                if (err.message.startsWith("SCRIPT_NO_PUBLICADO")) {
+                    alert(
+                        "🚨 EL PROBLEMA NO ESTÁ EN TU WEB, ESTÁ EN GOOGLE APPS SCRIPT.\n\n" +
+                        "La versión PUBLICADA de tu script no tiene las funciones doGet/doPost.\n" +
+                        "Esto ocurre cuando guardas el código pero NO creas una 'Nueva versión' al implementar.\n\n" +
+                        "SOLUCIÓN (en script.google.com):\n" +
+                        "1. Pega el código COMPLETO v3 en Code.gs\n" +
+                        "2. Guardar (Ctrl+S)\n" +
+                        "3. Implementar ▸ Gestionar implementaciones\n" +
+                        "4. Icono del lápiz ✏️\n" +
+                        "5. Desplegable 'Versión' ▸ elige 'Nueva versión'\n" +
+                        "6. 'Quién tiene acceso' ▸ Cualquier persona\n" +
+                        "7. Implementar ▸ Aceptar\n\n" +
+                        "Detalle técnico recibido:\n" + err.message.replace("SCRIPT_NO_PUBLICADO::", "")
+                    );
+                } else if (err.message.startsWith("RESPUESTA_NO_JSON")) {
+                    alert("⚠️ El servidor respondió algo que no es JSON.\n\nRespuesta:\n" + err.message.replace("RESPUESTA_NO_JSON::", ""));
+                } else {
+                    alert("❌ Error de conexión con el servidor.\n\nDetalles: " + err.message + "\n\nComprueba tu internet y que la SCRIPT_URL termine en /exec");
+                }
             })
             .finally(() => {
-                if (btn) {
-                    btn.textContent = textoOriginal || '📧 Generar Informe y Enviar por Email';
-                    btn.disabled = false;
-                }
+                if (btn) { btn.innerHTML = original || '📧 Generar Informe y Enviar por Email'; btn.disabled = false; }
             });
         }
 
-        /**
-         * Recopila los datos de la simulación y dispara el envío
-         */
+        /** Recopila los datos de la simulación y lanza el envío */
         function generarYEnviarInforme() {
             try {
-                const totalGeneracion = leerValorDOM('totalGeneracion');
-                const totalConsumo = leerValorDOM('totalConsumo');
+                const totalGeneracion   = leerValorDOM('totalGeneracion');
+                const totalConsumo      = leerValorDOM('totalConsumo');
                 const energiaCompartida = leerValorDOM('energiaCompartida');
-                const balanceComunitario = leerValorDOM('balanceComunitario');
+                const balanceComunitario= leerValorDOM('balanceComunitario');
                 const porcentajeRenovable = leerValorDOM('porcentajeRenovable');
-                const demandaCubierta = leerValorDOM('demandaCubierta');
+                const demandaCubierta   = leerValorDOM('demandaCubierta');
+
+                if (totalGeneracion === 0 && totalConsumo === 0) {
+                    alert("⚠️ La simulación aún no tiene valores.\nEspera 2-3 segundos a que el dashboard cargue y vuelve a pulsar.");
+                    return;
+                }
 
                 const ahorroEstimado = (totalGeneracion * CONFIG.PRECIO_KWH).toFixed(2);
-                const escenarioActual = ESCENARIOS[estadoActual.escenario] || { nombre: "Desconocido", hora: 0, descripcion: "" };
+                const esc = ESCENARIOS[estadoActual.escenario] || { nombre: "Desconocido", hora: 0, descripcion: "" };
 
                 const observaciones = [
-                    `Escenario: ${escenarioActual.nombre}`,
-                    `Hora simulada: ${escenarioActual.hora}:00`,
-                    `Descripción: ${escenarioActual.descripcion || 'N/A'}`,
-                    `Energía compartida: ${energiaCompartida} kWh`,
-                    `% Renovable: ${porcentajeRenovable}%`,
-                    `Balance: ${balanceComunitario} kWh`,
-                    `Demanda cubierta: ${demandaCubierta}%`,
-                    `Ahorro estimado: ${ahorroEstimado} €`,
-                    `Fecha: ${new Date().toLocaleString('es-ES')}`
-                ].join('\n');
+                    "Escenario: " + esc.nombre,
+                    "Hora simulada: " + esc.hora + ":00",
+                    "Descripción: " + (esc.descripcion || "N/A"),
+                    "Energía compartida: " + energiaCompartida + " kWh",
+                    "% Renovable: " + porcentajeRenovable + "%",
+                    "Balance: " + balanceComunitario + " kWh",
+                    "Demanda cubierta: " + demandaCubierta + "%",
+                    "Ahorro estimado: " + ahorroEstimado + " €",
+                    "Fecha: " + new Date().toLocaleString('es-ES')
+                ].join("\n");
 
                 const datosParaEnviar = {
                     nombre: "Simulación Comunidad Energética ECOGRY PRO",
@@ -1316,17 +1337,11 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
                 };
 
                 console.log("📦 Datos preparados:", datosParaEnviar);
-
-                if (totalGeneracion === 0 && totalConsumo === 0) {
-                    alert("⚠️ No hay datos de simulación todavía.\nEspera unos segundos a que carguen los valores.");
-                    return;
-                }
-
                 enviarInforme(datosParaEnviar);
 
             } catch (error) {
-                console.error("❌ Error en generarYEnviarInforme:", error);
-                alert("❌ Error al preparar el informe: " + error.message);
+                console.error("❌ Error al preparar informe:", error);
+                alert("❌ Error interno al preparar el informe:\n" + error.message);
             }
         }
         // ============================================
