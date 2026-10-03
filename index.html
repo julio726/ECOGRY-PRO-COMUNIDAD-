@@ -1081,7 +1081,23 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
                     <li><strong>Noche:</strong> Generación principalmente eólica con bajo consumo</li>
                 </ul>
             </div>
-
+            <!-- CAMPO PARA EL NOMBRE DEL USUARIO -->
+            <div class="doc-section" style="margin-top:25px;">
+                <h3>👤 Tu nombre para el informe</h3>
+                <p style="color:#a0a0a0; margin-bottom:12px;">
+                    Escribe tu nombre tal como quieres que aparezca en el PDF del informe.
+                </p>
+                <input type="text" id="inputNombreInforme" placeholder="Ej.: Julio Daniel Vides Payares"
+                       maxlength="80"
+                       style="width:100%; padding:14px 16px; border-radius:10px;
+                              background:rgba(0,0,0,0.35);
+                              border:1px solid rgba(102,126,234,0.4);
+                              color:#fff; font-size:1.05em; outline:none;
+                              transition:all 0.3s ease;">
+                <small id="nombreHint" style="display:block; margin-top:8px; color:#888; font-size:0.85em;">
+                    Si lo dejas vacío, el informe se generará como “Anónimo”.
+                </small>
+            </div>
             <div class="action-buttons">
                 <button class="btn btn-report" onclick="generarYEnviarInforme()">📧 Generar Informe y Enviar por Email</button>
                 <button class="btn" onclick="exportData()">📥 Exportar Datos (JSON)</button>
