@@ -1267,24 +1267,43 @@ function enviarInforme(datosSimulacion) {
     });
 }
 
-function generarYEnviarInforme() {
+function enviarInforme(datosSimulacion) {
+  console.log("📤 Preparando envío...", datosSimulacion);
+  
+  const btn = document.querySelector('.btn-report');
+  const textoOriginal = btn.textContent;
+  btn.textContent = '⏳ Enviando informe...';
+  btn.disabled = true;
+
+  fetch(SCRIPT_URL, {
+    method: "POST",
+    // No usamos headers ni mode para evitar el "preflight" de CORS que GAS no soporta bien
+    body: JSON.stringify(datosSimulacion)
+  })
+  .then(response => response.text()) // Usamos text() porque a veces GAS devuelve HTML de error
+  .then(text => {
     try {
-        console.log("🔄 Iniciando generación de informe...");
-        
-        //  Obtener valores de forma SEGURA con valores por defecto
-        const getElementValue = (id) => {
-            const el = document.getElementById(id);
-            if (!el) {
-                console.warn(`⚠️ Elemento con id '${id}' no encontrado`);
-                return 0;
-            }
-            const val = parseFloat(el.textContent);
-            if (isNaN(val)) {
-                console.warn(`⚠️ Valor no numérico en '${id}': '${el.textContent}'`);
-                return 0;
-            }
-            return val;
-        };
+      const data = JSON.parse(text);
+      if (data.result === "success") {
+        alert("✅ ¡ÉXITO!\n\nEl informe se ha guardado en la hoja de cálculo y el correo PDF ha sido enviado a:\n📧 juliodanielvidespayares2@gmail.com\n\n(Revisa tu carpeta de Spam si no lo ves en la bandeja de entrada)");
+      } else {
+        alert("❌ El servidor reportó un error:\n" + data.message);
+      }
+    } catch (e) {
+      // Si no es JSON, es un error de red o de GAS
+      console.error("Respuesta no JSON:", text);
+      alert("⚠️ El servidor no respondió correctamente. Revisa la consola (F12) para más detalles.");
+    }
+  })
+  .catch(error => {
+    console.error("❌ Error de red:", error);
+    alert("❌ Error de conexión. Verifica tu internet o que la URL del script sea correcta.");
+  })
+  .finally(() => {
+    btn.textContent = textoOriginal;
+    btn.disabled = false;
+  });
+}
         
         const totalGeneracion = getElementValue('totalGeneracion');
         const totalConsumo = getElementValue('totalConsumo');
