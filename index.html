@@ -752,6 +752,11 @@
             color: #000;
         }
 
+        .btn-report {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: #000;
+        }
+
         /* ============================================
            SCROLLBAR PERSONALIZADO
            ============================================ */
@@ -875,10 +880,10 @@
                     ☀️ Alta Generación Solar
                 </button>
                 <button class="scenario-btn btn-alta-demanda" onclick="changeScenario('altaDemanda')">
-                    🏭 Alta Demanda
+                     Alta Demanda
                 </button>
                 <button class="scenario-btn btn-equilibrio" onclick="changeScenario('equilibrio')">
-                    ⚖️ Equilibrio Óptimo
+                    ️ Equilibrio Óptimo
                 </button>
                 <button class="scenario-btn btn-noche" onclick="changeScenario('noche')">
                     🌙 Generación Nocturna
@@ -890,7 +895,7 @@
         <div class="dashboard">
             <!-- CARD 1: RESUMEN ENERGÉTICO -->
             <div class="card">
-                <h2>📈 Resumen Energético en Tiempo Real</h2>
+                <h2> Resumen Energético en Tiempo Real</h2>
                 <div class="stats-grid">
                     <div class="stat-item">
                         <div class="stat-value" id="totalGeneracion">0</div>
@@ -992,7 +997,7 @@
                 </div>
             </div>
 
-            <!-- CARD 6: AUTOCONSUMO Y EXCEDENTES -->
+            <!-- CARD 7: AUTOCONSUMO Y EXCEDENTES -->
             <div class="card">
                 <h2>📊 Análisis de Autoconsumo y Excedentes</h2>
                 <div class="chart-container">
@@ -1023,7 +1028,7 @@
 
         <!-- SECCIÓN DE DOCUMENTACIÓN ACADÉMICA -->
         <div class="documentation">
-            <h2 class="control-section-title">📚 Documentación Técnica del Proyecto</h2>
+            <h2 class="control-section-title"> Documentación Técnica del Proyecto</h2>
             
             <div class="doc-section">
                 <h3>1. Descripción del Sistema</h3>
@@ -1078,9 +1083,10 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
             </div>
 
             <div class="action-buttons">
+                <button class="btn btn-report" onclick="generarYEnviarInforme()">📧 Generar Informe y Enviar por Email</button>
                 <button class="btn" onclick="exportData()">📥 Exportar Datos (JSON)</button>
-                <button class="btn btn-secondary" onclick="window.print()">🖨️ Imprimir Reporte</button>
-                <button class="btn" onclick="resetSimulation()">🔄 Reiniciar Simulación</button>
+                <button class="btn btn-secondary" onclick="window.print()">️ Imprimir Reporte</button>
+                <button class="btn" onclick="resetSimulation()"> Reiniciar Simulación</button>
             </div>
         </div>
     </div>
@@ -1099,12 +1105,18 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
          */
 
         // ============================================
+        // CONFIGURACIÓN DEL SISTEMA DE INFORMES
+        // ============================================
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvTR0xoObx1bkiF78WsAPy_AiSkEwKyVamuYSWplU6wkDF3EOk1z9mI5lfxdgfRy6x/exec";
+
+        // ============================================
         // CONFIGURACIÓN GLOBAL Y CONSTANTES
         // ============================================
         const CONFIG = {
             BASE_CONSUMO: 400, // kWh base de la comunidad
             UPDATE_INTERVAL: 5000, // Actualización cada 5 segundos
             ANIMATION_DURATION: 1500, // Duración de animaciones en ms
+            PRECIO_KWH: 0.15, // Precio estimado por kWh en euros
             PRODUCERS: [
                 { 
                     id: 1, 
@@ -1122,7 +1134,7 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
                     tipo: "eolica", 
                     capacidad: 200, 
                     produccionActual: 0, 
-                    icon: "💨",
+                    icon: "",
                     imagen: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400",
                     descripcion: "Turbinas eólicas de alta eficiencia"
                 },
@@ -1142,7 +1154,7 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
                     tipo: "eolica", 
                     capacidad: 180, 
                     produccionActual: 0, 
-                    icon: "🌬️",
+                    icon: "️",
                     imagen: "https://images.unsplash.com/photo-1532601451126-8e1c1e2f9a8b?w=400",
                     descripcion: "Generación eólica complementaria"
                 },
@@ -1207,6 +1219,67 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
             productores: [...CONFIG.PRODUCERS],
             charts: {}
         };
+
+        // ============================================
+        // FUNCIONES DE ENVÍO DE INFORMES
+        // ============================================
+
+        /**
+         * Envía los datos de la simulación al Google Apps Script
+         * para generar informe PDF y enviar por correo
+         */
+        function enviarInforme(datosSimulacion) {
+            console.log("Enviando informe a Google Sheets...");
+            
+            fetch(SCRIPT_URL, {
+                method: "POST",
+                body: JSON.stringify(datosSimulacion)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.result === "success") {
+                    alert("✅ ¡Informe generado exitosamente!\n\nEl informe PDF ha sido enviado a:\n📧 juliodanielvidespayares2@gmail.com\n\nTambién se ha guardado en la hoja de cálculo.");
+                } else {
+                    alert("❌ Error al generar el informe: " + data.message);
+                }
+            })
+            .catch(error => {
+                console.error("Error de red:", error);
+                alert("❌ Error de conexión al generar el informe.\nPor favor, inténtalo de nuevo.");
+            });
+        }
+
+        /**
+         * Recopila todos los datos de la simulación actual
+         * y los envía para generar el informe
+         */
+        function generarYEnviarInforme() {
+            // Calcular ahorro estimado (kWh generados * precio kWh)
+            const totalGeneracion = parseFloat(document.getElementById('totalGeneracion').textContent) || 0;
+            const ahorroEstimado = (totalGeneracion * CONFIG.PRECIO_KWH).toFixed(2);
+            
+            // Obtener el escenario actual
+            const escenarioActual = ESCENARIOS[estadoActual.escenario];
+            
+            // Recopilar todos los datos relevantes
+            const datosParaEnviar = {
+                nombre: "Simulación Comunidad Energética",
+                correo: "juliodanielvidespayares2@gmail.com",
+                energiaGenerada: totalGeneracion,
+                energiaConsumida: parseFloat(document.getElementById('totalConsumo').textContent) || 0,
+                ahorro: parseFloat(ahorroEstimado),
+                observaciones: `Escenario: ${escenarioActual.nombre}\n` +
+                              `Hora simulada: ${escenarioActual.hora}:00\n` +
+                              `Energía compartida: ${document.getElementById('energiaCompartida').textContent} kWh\n` +
+                              `% Renovable: ${document.getElementById('porcentajeRenovable').textContent}\n` +
+                              `Balance: ${document.getElementById('balanceComunitario').textContent} kWh\n` +
+                              `Demanda cubierta: ${document.getElementById('demandaCubierta').textContent}\n` +
+                              `Fecha: ${new Date().toLocaleString()}`
+            };
+            
+            // Enviar el informe
+            enviarInforme(datosParaEnviar);
+        }
 
         // ============================================
         // FUNCIONES DE INICIALIZACIÓN
@@ -1778,6 +1851,7 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
 
             console.log('✅ Sistema de Comunidad Energética inicializado correctamente');
             console.log('📊 Proyecto Académico - Algoritmos y Programación 2026');
+            console.log('📧 Sistema de informes por email configurado');
         });
     </script>
 </body>
