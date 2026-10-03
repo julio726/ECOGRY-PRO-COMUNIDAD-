@@ -1220,154 +1220,115 @@ Porcentaje_Autoconsumo = (Autoconsumo / Generación_Total) × 100
             charts: {}
         };
 
-       // ============================================
-// FUNCIONES DE ENVÍO DE INFORMES (CORREGIDAS)
-// ============================================
+              // ============================================
+        // FUNCIONES DE ENVÍO DE INFORMES (CORREGIDAS)
+        // ============================================
 
-function enviarInforme(datosSimulacion) {
-    console.log("📤 Enviando datos al servidor:", datosSimulacion);
-    console.log("🔗 URL del script:", SCRIPT_URL);
-    
-    // Mostrar indicador de carga
-    const btnInforme = document.querySelector('.btn-report');
-    if (btnInforme) {
-        btnInforme.textContent = '⏳ Generando informe...';
-        btnInforme.disabled = true;
-    }
-    
-    fetch(SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors", //  CLAVE: evita errores CORS
-        headers: {
-            "Content-Type": "text/plain;charset=utf-8",
-        },
-        body: JSON.stringify(datosSimulacion)
-    })
-    .then(() => {
-        // Con mode: "no-cors" no podemos leer la respuesta,
-        // pero si no hay error de red, asumimos que se envió correctamente.
-        console.log("✅ Datos enviados correctamente al servidor");
-        alert("✅ ¡Informe generado exitosamente!\n\nEl informe PDF ha sido enviado a:\n📧 juliodanielvidespayares2@gmail.com\n\nTambién se ha guardado en la hoja de cálculo.");
-        
-        // Restaurar botón
-        if (btnInforme) {
-            btnInforme.textContent = '📧 Generar Informe y Enviar por Email';
-            btnInforme.disabled = false;
-        }
-    })
-    .catch(error => {
-        console.error("❌ Error de red:", error);
-        alert("❌ Error de conexión al generar el informe.\n\nDetalles: " + error.message);
-        
-        // Restaurar botón
-        if (btnInforme) {
-            btnInforme.textContent = '📧 Generar Informe y Enviar por Email';
-            btnInforme.disabled = false;
-        }
-    });
-}
-
-function enviarInforme(datosSimulacion) {
-  console.log("📤 Preparando envío...", datosSimulacion);
-  
-  const btn = document.querySelector('.btn-report');
-  const textoOriginal = btn.textContent;
-  btn.textContent = '⏳ Enviando informe...';
-  btn.disabled = true;
-
-  fetch(SCRIPT_URL, {
-    method: "POST",
-    // No usamos headers ni mode para evitar el "preflight" de CORS que GAS no soporta bien
-    body: JSON.stringify(datosSimulacion)
-  })
-  .then(response => response.text()) // Usamos text() porque a veces GAS devuelve HTML de error
-  .then(text => {
-    try {
-      const data = JSON.parse(text);
-      if (data.result === "success") {
-        alert("✅ ¡ÉXITO!\n\nEl informe se ha guardado en la hoja de cálculo y el correo PDF ha sido enviado a:\n📧 juliodanielvidespayares2@gmail.com\n\n(Revisa tu carpeta de Spam si no lo ves en la bandeja de entrada)");
-      } else {
-        alert("❌ El servidor reportó un error:\n" + data.message);
-      }
-    } catch (e) {
-      // Si no es JSON, es un error de red o de GAS
-      console.error("Respuesta no JSON:", text);
-      alert("⚠️ El servidor no respondió correctamente. Revisa la consola (F12) para más detalles.");
-    }
-  })
-  .catch(error => {
-    console.error("❌ Error de red:", error);
-    alert("❌ Error de conexión. Verifica tu internet o que la URL del script sea correcta.");
-  })
-  .finally(() => {
-    btn.textContent = textoOriginal;
-    btn.disabled = false;
-  });
-}
-        
-        const totalGeneracion = getElementValue('totalGeneracion');
-        const totalConsumo = getElementValue('totalConsumo');
-        const energiaCompartida = getElementValue('energiaCompartida');
-        const balanceComunitario = getElementValue('balanceComunitario');
-        
-        // Obtener texto con porcentaje (quitando el % si existe)
-        const getPercentValue = (id) => {
+        /**
+         * Lee un valor numérico desde un elemento del DOM de forma segura
+         */
+        function leerValorDOM(id) {
             const el = document.getElementById(id);
             if (!el) return 0;
-            const texto = el.textContent.replace('%', '').trim();
+            const texto = el.textContent.replace('%', '').replace('kWh', '').trim();
             const val = parseFloat(texto);
             return isNaN(val) ? 0 : val;
-        };
-        
-        const porcentajeRenovable = getPercentValue('porcentajeRenovable');
-        const demandaCubierta = getPercentValue('demandaCubierta');
-        
-        // Calcular ahorro
-        const ahorroEstimado = (totalGeneracion * CONFIG.PRECIO_KWH).toFixed(2);
-        
-        // Escenario actual
-        const escenarioActual = ESCENARIOS[estadoActual.escenario] || { nombre: "Desconocido", hora: 0 };
-        
-        // Construir observaciones detalladas
-        const observaciones = [
-            `Escenario: ${escenarioActual.nombre}`,
-            `Hora simulada: ${escenarioActual.hora}:00`,
-            `Descripción: ${escenarioActual.descripcion || 'N/A'}`,
-            `Energía compartida: ${energiaCompartida} kWh`,
-            `% Renovable: ${porcentajeRenovable}%`,
-            `Balance: ${balanceComunitario} kWh`,
-            `Demanda cubierta: ${demandaCubierta}%`,
-            `Ahorro estimado: ${ahorroEstimado} €`,
-            `Fecha de simulación: ${new Date().toLocaleString('es-ES')}`
-        ].join('\n');
-        
-        // Datos a enviar
-        const datosParaEnviar = {
-            nombre: "Simulación Comunidad Energética ECOGRY PRO",
-            correo: "juliodanielvidespayares2@gmail.com",
-            energiaGenerada: totalGeneracion,
-            energiaConsumida: totalConsumo,
-            ahorro: parseFloat(ahorroEstimado),
-            observaciones: observaciones
-        };
-        
-        console.log("📦 Datos preparados:", datosParaEnviar);
-        
-        // Validar que al menos hay datos
-        if (totalGeneracion === 0 && totalConsumo === 0) {
-            alert("⚠️ No hay datos de simulación disponibles.\nPor favor, espera a que la simulación cargue los valores.");
-            return;
         }
-        
-        // Enviar
-        enviarInforme(datosParaEnviar);
-        
-    } catch (error) {
-        console.error("❌ Error en generarYEnviarInforme:", error);
-        alert("❌ Error al preparar el informe: " + error.message);
-    }
-}
 
+        /**
+         * Envía los datos al Google Apps Script
+         */
+        function enviarInforme(datosSimulacion) {
+            console.log("📤 Enviando datos al servidor:", datosSimulacion);
+
+            const btn = document.querySelector('.btn-report');
+            const textoOriginal = btn ? btn.textContent : '';
+            if (btn) {
+                btn.textContent = '⏳ Generando informe...';
+                btn.disabled = true;
+            }
+
+            // SIN headers y SIN mode no-cors: así podemos leer la respuesta real
+            fetch(SCRIPT_URL, {
+                method: "POST",
+                body: JSON.stringify(datosSimulacion)
+            })
+            .then(response => response.text())
+            .then(text => {
+                console.log("📩 Respuesta del servidor:", text);
+                try {
+                    const data = JSON.parse(text);
+                    if (data.result === "success") {
+                        alert("✅ ¡Informe generado!\n\n📧 PDF enviado a:\njuliodanielvidespayares2@gmail.com\n📊 Datos guardados en la hoja de cálculo.\n\n(Revisa Spam si no lo ves)");
+                    } else {
+                        alert("❌ El servidor reportó un error:\n" + (data.message || text));
+                    }
+                } catch (e) {
+                    alert("⚠️ El servidor no respondió en formato esperado.\nRevisa la consola (F12).");
+                }
+            })
+            .catch(error => {
+                console.error("❌ Error de red:", error);
+                alert("❌ Error de conexión.\nDetalles: " + error.message);
+            })
+            .finally(() => {
+                if (btn) {
+                    btn.textContent = textoOriginal || '📧 Generar Informe y Enviar por Email';
+                    btn.disabled = false;
+                }
+            });
+        }
+
+        /**
+         * Recopila los datos de la simulación y dispara el envío
+         */
+        function generarYEnviarInforme() {
+            try {
+                const totalGeneracion = leerValorDOM('totalGeneracion');
+                const totalConsumo = leerValorDOM('totalConsumo');
+                const energiaCompartida = leerValorDOM('energiaCompartida');
+                const balanceComunitario = leerValorDOM('balanceComunitario');
+                const porcentajeRenovable = leerValorDOM('porcentajeRenovable');
+                const demandaCubierta = leerValorDOM('demandaCubierta');
+
+                const ahorroEstimado = (totalGeneracion * CONFIG.PRECIO_KWH).toFixed(2);
+                const escenarioActual = ESCENARIOS[estadoActual.escenario] || { nombre: "Desconocido", hora: 0, descripcion: "" };
+
+                const observaciones = [
+                    `Escenario: ${escenarioActual.nombre}`,
+                    `Hora simulada: ${escenarioActual.hora}:00`,
+                    `Descripción: ${escenarioActual.descripcion || 'N/A'}`,
+                    `Energía compartida: ${energiaCompartida} kWh`,
+                    `% Renovable: ${porcentajeRenovable}%`,
+                    `Balance: ${balanceComunitario} kWh`,
+                    `Demanda cubierta: ${demandaCubierta}%`,
+                    `Ahorro estimado: ${ahorroEstimado} €`,
+                    `Fecha: ${new Date().toLocaleString('es-ES')}`
+                ].join('\n');
+
+                const datosParaEnviar = {
+                    nombre: "Simulación Comunidad Energética ECOGRY PRO",
+                    correo: "juliodanielvidespayares2@gmail.com",
+                    energiaGenerada: totalGeneracion,
+                    energiaConsumida: totalConsumo,
+                    ahorro: parseFloat(ahorroEstimado),
+                    observaciones: observaciones
+                };
+
+                console.log("📦 Datos preparados:", datosParaEnviar);
+
+                if (totalGeneracion === 0 && totalConsumo === 0) {
+                    alert("⚠️ No hay datos de simulación todavía.\nEspera unos segundos a que carguen los valores.");
+                    return;
+                }
+
+                enviarInforme(datosParaEnviar);
+
+            } catch (error) {
+                console.error("❌ Error en generarYEnviarInforme:", error);
+                alert("❌ Error al preparar el informe: " + error.message);
+            }
+        }
         // ============================================
         // FUNCIONES DE INICIALIZACIÓN
         // ============================================
