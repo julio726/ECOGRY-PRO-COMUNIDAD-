@@ -180,6 +180,13 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.3);box-shadow:
 @keyframes waveBar{0%,100%{height:6px;}50%{height:16px;}}
 
 @media (max-width:768px){.dashboard{grid-template-columns:1fr;}.card.full-width{grid-column:1;}.scenario-buttons{flex-direction:column;}.scenario-btn{width:100%;}.producers-grid{grid-template-columns:1fr;}.control-grid{grid-template-columns:1fr;}header h1{font-size:1.8em;}#scene3d{height:340px;}#chatPanel{width:calc(100vw - 30px);height:60vh;}#terminatorBtn{width:70px;height:70px;}#terminatorBtn svg{width:54px;height:54px;}}
+
+/* Estilos del panel añadido de balances individuales, integrados con el tema original */
+#usuariosComunidad .producer-card{box-shadow:0 4px 16px rgba(0,0,0,.18);}
+#usuariosComunidad .producer-stat-value{font-size:1.15em;color:var(--color-primary);}
+.audit-panel{margin-top:18px;padding:16px;border-radius:12px;background:rgba(102,126,234,.12);border:1px solid rgba(102,126,234,.35);}
+.audit-panel strong{color:var(--color-success);}
+
 </style>
 </head>
 <body>
@@ -251,8 +258,8 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.3);box-shadow:
 <div class="card">
 <h2>📈 Resumen Energético en Tiempo Real</h2>
 <div class="stats-grid">
-<div class="stat-item"><div class="stat-value" id="totalGeneracion">0</div><div class="stat-label">kWh Generados</div></div>
-<div class="stat-item"><div class="stat-value" id="totalConsumo">0</div><div class="stat-label">kWh Consumidos</div></div>
+<div class="stat-item"><div class="stat-value" id="totalGeneracion">0</div><div class="stat-label">kWh equivalentes generados</div></div>
+<div class="stat-item"><div class="stat-value" id="totalConsumo">0</div><div class="stat-label">kWh equivalentes consumidos</div></div>
 <div class="stat-item"><div class="stat-value" id="energiaCompartida">0</div><div class="stat-label">kWh Compartidos</div></div>
 <div class="stat-item"><div class="stat-value" id="porcentajeRenovable">0%</div><div class="stat-label">Energía Renovable</div></div>
 </div>
@@ -285,7 +292,7 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.3);box-shadow:
 <div class="card">
 <h2>⚖️ Balance Energético Comunitario</h2>
 <div class="stats-grid">
-<div class="stat-item"><div class="stat-value" id="balanceComunitario">0</div><div class="stat-label">Balance (kWh)</div></div>
+<div class="stat-item"><div class="stat-value" id="balanceComunitario">0</div><div class="stat-label">Balance generación − consumo (kWh)</div></div>
 <div class="stat-item"><div class="stat-value" id="demandaCubierta">0%</div><div class="stat-label">Demanda cubierta</div></div>
 <div class="stat-item"><div class="stat-value" id="energiaLocal">0</div><div class="stat-label">Energía local</div></div>
 <div class="stat-item"><div class="stat-value" id="energiaExportada">0</div><div class="stat-label">Excedente exportado</div></div>
@@ -301,6 +308,28 @@ input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.3);box-shadow:
 </div>
 </div>
 </div>
+
+<section class="card full-width" id="usuariosComunidad" style="margin-bottom:30px;">
+<h2>👥 Usuarios de la comunidad · Balance individual</h2>
+<p style="color:#607086;margin:-10px 0 18px;">Cada usuario tiene generación propia, consumo, autoconsumo directo, energía compartida recibida o entregada, y saldo final. El reparto se calcula una sola vez para evitar duplicar kWh.</p>
+<div id="usuariosGrid" class="producers-grid" style="max-height:none;"></div>
+<div class="stats-grid" style="margin-top:20px;">
+<div class="stat-item"><div class="stat-value" id="totalCompartidoEntregado">0</div><div class="stat-label">Excedente local entregado (kWh)</div></div>
+<div class="stat-item"><div class="stat-value" id="totalCompartidoRecibido">0</div><div class="stat-label">Energía local recibida (kWh)</div></div>
+<div class="stat-item"><div class="stat-value" id="totalImportadoUsuarios">0</div><div class="stat-label">Importación desde la red (kWh)</div></div>
+<div class="stat-item"><div class="stat-value" id="totalExportadoUsuarios">0</div><div class="stat-label">Excedente final exportado (kWh)</div></div>
+</div>
+<div class="doc-section" style="margin-top:20px;">
+<h3>Regla de reparto transparente</h3>
+<ol style="padding-left:22px;">
+<li>Primero, cada usuario consume su propia generación hasta cubrir su demanda.</li>
+<li>Los excedentes restantes se asignan a los usuarios deficitarios en proporción a su déficit.</li>
+<li>Solo el excedente que queda después del reparto se exporta; solo el déficit que sigue sin cubrirse se importa.</li>
+<li>La energía compartida entregada y recibida debe coincidir. Se cuenta como transferencia interna, no como nueva generación.</li>
+</ol>
+<p id="auditoriaEnergia" style="margin-top:12px;font-weight:700;color:#18794e;">Auditoría energética: verificando conservación de energía…</p>
+</div>
+</section>
 
 <div class="documentation">
 <h2 class="control-section-title">📚 Documentación Técnica del Proyecto</h2>
@@ -795,14 +824,55 @@ function calcularProduccion(){
   return { solar:totalSolar, eolica:totalEolica, total:totalSolar+totalEolica };
 }
 function calcularConsumo(){ return CONFIG.BASE_CONSUMO * curvaDemanda(estado.horaSimulada) * estado.factorDemanda; }
+const USUARIOS = [
+  {id:1,nombre:"Hogar Sol",tipo:"Prosumidor solar",gen:0.18,cons:0.13,icon:"🏡"},
+  {id:2,nombre:"Cooperativa agrícola",tipo:"Productor eólico",gen:0.24,cons:0.19,icon:"🌾"},
+  {id:3,nombre:"Tienda comunitaria",tipo:"Consumidor",gen:0.00,cons:0.12,icon:"🏪"},
+  {id:4,nombre:"Centro educativo",tipo:"Consumidor",gen:0.00,cons:0.16,icon:"🏫"},
+  {id:5,nombre:"Hogar mixto",tipo:"Prosumidor solar/eólico",gen:0.28,cons:0.15,icon:"🏠"},
+  {id:6,nombre:"Centro de salud",tipo:"Consumidor prioritario",gen:0.00,cons:0.15,icon:"🏥"},
+  {id:7,nombre:"Asociación vecinal",tipo:"Productor comunitario",gen:0.30,cons:0.10,icon:"🏘️"}
+];
 function distribuirEnergia(prod, cons){
-  const auto = Math.min(cons, prod.total);
-  const rest = Math.max(0, prod.total - auto);
-  const demRest = Math.max(0, cons - auto);
-  const comp = Math.min(rest, demRest);
-  const exc = Math.max(0, rest - comp);
-  const imp = Math.max(0, demRest - comp);
-  return { autoconsumo:auto, compartida:comp, excedentes:exc, importada:imp, energiaUtilizadaLocalmente:auto+comp };
+  // Reparte la generación total y la demanda entre usuarios; los pesos suman 1.
+  const pesoGen = USUARIOS.reduce((s,u)=>s+u.gen,0);
+  const pesoCons = USUARIOS.reduce((s,u)=>s+u.cons,0);
+  const usuarios = USUARIOS.map(u=>{
+    const generacion = pesoGen ? prod.total*u.gen/pesoGen : 0;
+    const consumo = pesoCons ? cons*u.cons/pesoCons : 0;
+    const directo = Math.min(generacion,consumo);
+    return {...u,generacion,consumo,autoconsumo:directo,excedente:generacion-directo,deficit:consumo-directo,compartidaEntregada:0,compartidaRecibida:0,importada:0,exportada:0};
+  });
+  let bolsa = usuarios.reduce((s,u)=>s+u.excedente,0);
+  let deficitTotal = usuarios.reduce((s,u)=>s+u.deficit,0);
+  const compartible = Math.min(bolsa,deficitTotal);
+  // Asignación proporcional al déficit. La suma entregada nunca supera la bolsa.
+  if(deficitTotal > 0 && compartible > 0){
+    usuarios.forEach(u=>{
+      u.compartidaRecibida = compartible * (u.deficit/deficitTotal);
+      u.compartidaEntregada = compartible * (u.excedente/Math.max(bolsa,1e-12));
+    });
+  }
+  usuarios.forEach(u=>{
+    u.importada = Math.max(0,u.deficit-u.compartidaRecibida);
+    u.exportada = Math.max(0,u.excedente-u.compartidaEntregada);
+  });
+  const sum = key => usuarios.reduce((s,u)=>s+u[key],0);
+  const autoconsumo = sum('autoconsumo');
+  const compartida = sum('compartidaRecibida');
+  const excedentes = sum('exportada');
+  const importada = sum('importada');
+  const entregada = sum('compartidaEntregada');
+  const generacionUsuarios = sum('generacion');
+  const consumoUsuarios = sum('consumo');
+  const errorReparto = Math.abs(entregada-compartida);
+  const errorBalance = Math.abs(generacionUsuarios + importada - consumoUsuarios - excedentes);
+  return {
+    autoconsumo, compartida, excedentes, importada,
+    energiaUtilizadaLocalmente:autoconsumo+compartida,
+    usuarios, entregada, generacionUsuarios, consumoUsuarios,
+    errorReparto, errorBalance
+  };
 }
 function refrescarFactores(){
   const nubes = parseFloat(document.getElementById('solarSlider').value)/100;
@@ -836,6 +906,7 @@ function loop(ts){
   estado.frameCount++;
   if(estado.frameCount%20===0){
     updateProducersGrid();
+    updateUsuariosGrid(dist);
     updateCharts(prod, cons, dist);
   }
   renderer.render(scene, camera);
@@ -864,7 +935,7 @@ function updateDashboard(prod, cons, dist){
   setText('energiaLocal', dist.energiaUtilizadaLocalmente.toFixed(0));
   setText('energiaExportada', dist.excedentes.toFixed(0));
   setText('flowProductores', prod.total.toFixed(0)+' kWh');
-  setText('flowComunidad', dist.autoconsumo.toFixed(0)+' kWh');
+  setText('flowComunidad', (dist.autoconsumo+dist.compartida).toFixed(0)+' kWh');
   const fr = dist.excedentes - dist.importada;
   setText('flowRed', (fr>=0?'+':'')+fr.toFixed(0)+' kWh');
   const ap = prod.total>0 ? (dist.autoconsumo/prod.total*100) : 0;
@@ -873,6 +944,42 @@ function updateDashboard(prod, cons, dist){
   const ab=document.getElementById('autoconsumoBar'); ab.style.width=ap+'%'; ab.textContent=ap.toFixed(0)+'%';
   setText('excedentesPercent', ep.toFixed(1)+'%');
   const eb=document.getElementById('excedentesBar'); eb.style.width=ep+'%'; eb.textContent=ep.toFixed(0)+'%';
+}
+
+function updateUsuariosGrid(dist){
+  const c=document.getElementById('usuariosGrid');
+  if(!c || !dist || !dist.usuarios) return;
+  c.innerHTML='';
+  dist.usuarios.forEach(u=>{
+    const balance=u.generacion-u.consumo;
+    const card=document.createElement('article');
+    card.className='producer-card';
+    card.style.borderLeft='5px solid '+(balance>=0?'#159a70':'#e59b27');
+    const fmt=n=>n.toFixed(1);
+    card.innerHTML=
+      '<div class="producer-header"><div><div class="producer-name">'+u.icon+' '+u.nombre+'</div>'+
+      '<span class="producer-type-badge" style="background:#edf2ff;color:#4158a8;border:1px solid #cbd5ff;">'+u.tipo+'</span></div></div>'+
+      '<div class="producer-stats">'+
+      '<div class="producer-stat"><div class="producer-stat-value">'+fmt(u.generacion)+'</div><div class="producer-stat-label">Genera kWh</div></div>'+
+      '<div class="producer-stat"><div class="producer-stat-value">'+fmt(u.consumo)+'</div><div class="producer-stat-label">Consume kWh</div></div>'+
+      '<div class="producer-stat"><div class="producer-stat-value" style="color:'+(balance>=0?'#159a70':'#c47a11')+'">'+(balance>=0?'+':'')+fmt(balance)+'</div><div class="producer-stat-label">Balance bruto</div></div></div>'+
+      '<div style="margin-top:12px;font-size:.88em;color:#526176;line-height:1.8;">'+
+      'Autoconsumo: <b>'+fmt(u.autoconsumo)+'</b> kWh · Recibe: <b>'+fmt(u.compartidaRecibida)+'</b> kWh<br>'+
+      'Entrega: <b>'+fmt(u.compartidaEntregada)+'</b> kWh · Importa: <b>'+fmt(u.importada)+'</b> kWh · Exporta: <b>'+fmt(u.exportada)+'</b> kWh</div>';
+    c.appendChild(card);
+  });
+  setText('totalCompartidoEntregado',dist.entregada.toFixed(1));
+  setText('totalCompartidoRecibido',dist.compartida.toFixed(1));
+  setText('totalImportadoUsuarios',dist.importada.toFixed(1));
+  setText('totalExportadoUsuarios',dist.excedentes.toFixed(1));
+  const ok=dist.errorReparto<0.01 && dist.errorBalance<0.01;
+  const audit=document.getElementById('auditoriaEnergia');
+  if(audit){
+    audit.textContent=ok
+      ? '✓ Auditoría correcta: energía compartida entregada = recibida ('+dist.compartida.toFixed(2)+' kWh). Balance conservado; no hay doble contabilización.'
+      : '⚠ Revisar balance: diferencia de reparto '+dist.errorReparto.toFixed(3)+' kWh; error de conservación '+dist.errorBalance.toFixed(3)+' kWh.';
+    audit.style.color=ok?'#18794e':'#b42318';
+  }
 }
 
 function updateProducersGrid(){
@@ -1170,7 +1277,7 @@ function respuestaT800(pregunta){
 
   if(tiene('hola','buenos dias','buenas tardes','buenas noches','hey','que tal','saludos')){ return "Hola, humano. Soy el T-800, asistente de la comunidad energética. Ahora son las " + hora + " del día " + estado.dia + " y " + (esDia ? "el sol está activo" : "las turbinas eólicas están trabajando") + ". ¿Qué quieres saber?"; }
   if(tiene('ayuda','que puedes hacer','opciones','comandos','help')){ return "Puedo responder cosas como: Estado actual de la comunidad. Producción solar y eólica. Consumo y demanda cubierta. Excedentes e importación de red. Balance energético y ahorro. Hora y día simulados. Qué es una comunidad energética, autoconsumo, etcétera."; }
-  if(tiene('estado','resumen','situacion','como va','como esta todo','panorama')){ return "Estado a las " + hora + ", día " + estado.dia + ". Generación total: " + prod.total.toFixed(1) + " kilovatios hora. Solar: " + prod.solar.toFixed(1) + ". Eólica: " + prod.eolica.toFixed(1) + ". Consumo: " + cons.toFixed(1) + ". Balance: " + (balance>=0?"más ":"menos ") + Math.abs(balance).toFixed(1) + " kilovatios hora. Demanda cubierta: " + demandaCubierta.toFixed(1) + " por ciento. Ahorro acumulado: " + ahorro + " euros."; }
+  if(tiene('estado','resumen','situacion','como va','como esta todo','panorama')){ return "Estado a las " + hora + ", día " + estado.dia + ". Generación total: " + prod.total.toFixed(1) + " kilovatios hora. Solar: " + prod.solar.toFixed(1) + ". Eólica: " + prod.eolica.toFixed(1) + ". Consumo: " + cons.toFixed(1) + ". Balance: " + (balance>=0?"más ":"menos ") + Math.abs(balance).toFixed(1) + " kilovatios hora. Demanda cubierta: " + demandaCubierta.toFixed(1) + " por ciento. Ahorro acumulado: " + ahorro + " unidades monetarias estimadas."; }
   if(tiene('hora','que hora','reloj','momento del dia')){ return "Hora simulada: " + hora + ". Día " + estado.dia + ". " + (esDia?"Es de día, los paneles están produciendo.":"Es de noche, la solar está a cero y manda la eólica."); }
   if(tiene('dia','fecha','que dia')){ return "Estamos en el día " + estado.dia + " de la simulación, a las " + hora + ". Cada segundo real equivale a cinco minutos simulados."; }
   if(tiene('solar','paneles','fotovoltaic','sol ')){ if(!esDia || prod.solar<0.1){ return "Ahora mismo la producción solar es cero. Son las " + hora + ", fuera del rango seis a dieciocho horas. La capacidad solar instalada total es de " + capSolar + " kilovatios. Vuelve a consultar de día."; } const efic = (prod.solar/capSolar*100); return "Producción solar actual: " + prod.solar.toFixed(1) + " kilovatios hora, de " + capSolar + " kilovatios instalados. Eficiencia del " + efic.toFixed(0) + " por ciento. " + (efic>75?"Excelente irradiación, cielo despejado.":efic>40?"Irradiación moderada.":"Hay nubes reduciendo la captación."); }
@@ -1215,6 +1322,7 @@ document.addEventListener('DOMContentLoaded', function(){
   initScene3D();
   document.querySelector('.btn-equilibrio').classList.add('active');
   updateParameters();
+  updateUsuariosGrid(distribuirEnergia(calcularProduccion(),calcularConsumo()));
   requestAnimationFrame(loop);
   setTimeout(registrarEntrada, 1200);
   const inputNombre = document.getElementById('inputNombreInforme');
